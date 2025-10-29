@@ -45,15 +45,17 @@ const copyHeaders = (remoteRes, res) => {
   })
 }
 
-app.all('/firebase-proxy/*', async (req, res, next) => {
+app.use(express.raw({ type: '*/*' }))
+app.all('/firebase-proxy/*tmp', async (req, res, next) => {
   /** @type {URL} */
   let remoteUrl
   try {
     remoteUrl = new URL(req.url.replace(/^\/firebase-proxy\//, ''))
     // Only proxy Firebase URIs of project (limit abuse)
     if (
-      !remoteUrl.hostname.endsWith('.firebaseio.com') ||
-      (remoteUrl.pathname !== '/.lp' && remoteUrl.searchParams.get('ns') !== FIREBASE_RTDB_ID)
+      //!remoteUrl.hostname.endsWith('.firebaseio.com') ||
+      //(remoteUrl.pathname !== '/.lp' && remoteUrl.searchParams.get('ns') !== FIREBASE_RTDB_ID)
+false
     ) {
       throw new Error(`This host is not proxiable! URI=${remoteUrl.href}`)
     }
@@ -63,10 +65,14 @@ app.all('/firebase-proxy/*', async (req, res, next) => {
     return
   }
 
-  console.log('[FIREBASE PROXY]', remoteUrl.href)
+  console.log('[FIREBASE PROXY]', req.method, remoteUrl.href)
+  console.log(' > ', (typeof req.body === 'undefined') ? 'undef' : req.body.toString('ascii'))
   const remoteRes = await fetch(remoteUrl.href, {
+    method: req.method,
+    body: req.body,
     headers: {
       'User-Agent': req.headers['user-agent'],
+      'Content-Type': req.headers['content-type'],
       // 'X-Forwarded-For': req.ip, /* Not provided to not be geo-banned */
       'X-Firebase-Geo-Proxy': '1'
     }
@@ -76,11 +82,12 @@ app.all('/firebase-proxy/*', async (req, res, next) => {
 
   let content = await remoteRes.text()
   // console.log(content)
+  console.log(' < ', content)
 
   res.send(content)
 })
 
-app.all('/*', async (req, res) => {
+app.all('/*tmp', async (req, res) => {
   console.log('[WEBSITE PROXY ]', req.url)
   const remoteRes = await fetch(`${REMOTE_URI_PREFIX}${req.url}`, {
     headers: {
